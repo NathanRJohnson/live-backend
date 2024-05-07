@@ -54,7 +54,21 @@ func (i *Item) Create(w http.ResponseWriter, r *http.Request) {
 }
 
 func (i *Item) List(w http.ResponseWriter, r *http.Request) {
-	fmt.Println("List all items")
+	fmt.Println("List all items - test")
+	items, err := i.Repo.FetchAll(r.Context())
+	if err != nil {
+		fmt.Println("failed to fetch all:", err)
+		w.WriteHeader(http.StatusInternalServerError)
+	}
+
+	res, err := json.Marshal(items)
+	if err != nil {
+		fmt.Println("failed to marshal:", err)
+		w.WriteHeader(http.StatusInternalServerError)
+	}
+
+	w.Write(res)
+	w.WriteHeader(http.StatusOK)
 }
 
 func (i *Item) GetByID(w http.ResponseWriter, r *http.Request) {
