@@ -22,7 +22,7 @@ services:
 
 secrets:
   serviceKey:
-    file: ./secrets/live-firebase-serviceKey.json
+    file: ./secrets/firebase-serviceKey.json
 
   
   # goals-api:

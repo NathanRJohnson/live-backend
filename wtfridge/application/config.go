@@ -20,11 +20,13 @@ func LoadConfig() Config {
 		fmt.Println("Error getting current directory", err)
 	}
 
+	// local config init
 	cfg := Config{
 		ServerPort:  3000,
-		SecretsPath: filepath.Join(currentDir, "../secrets/live-firebase-serviceKey.json"),
+		SecretsPath: filepath.Join(currentDir, "../secrets/firebase-serviceKey.json"),
 	}
 
+	// load variables from docker environment
 	if serverPort, exists := os.LookupEnv("SERVER_PORT"); exists {
 		if port, err := strconv.ParseUint(serverPort, 10, 16); err == nil {
 			cfg.ServerPort = uint16(port)
