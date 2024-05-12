@@ -3,7 +3,6 @@ package handler
 import (
 	"encoding/json"
 	"fmt"
-	"math/rand"
 	"net/http"
 	"time"
 
@@ -18,7 +17,8 @@ type Item struct {
 func (i *Item) Create(w http.ResponseWriter, r *http.Request) {
 	fmt.Println("Create an items")
 	var body struct {
-		Name string `json:"item_name"`
+		ItemID int    `json:"item_id"`
+		Name   string `json:"item_name"`
 	}
 
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
@@ -26,10 +26,16 @@ func (i *Item) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// missing id
+	if body.ItemID == 0 || body.Name == "" {
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+
 	now := time.Now().UTC()
 
 	item := model.Item{
-		ItemID:    rand.Int(),
+		ItemID:    body.ItemID,
 		Name:      body.Name,
 		DateAdded: &now,
 	}
