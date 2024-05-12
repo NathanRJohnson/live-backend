@@ -33,8 +33,9 @@ func New(ctx context.Context, cfg Config) (*App, error) {
 
 func (a *App) Start(ctx context.Context) error {
 	server := &http.Server{
-		Addr:    fmt.Sprintf(":%d", a.config.ServerPort),
-		Handler: a.router,
+		Addr:        fmt.Sprintf(":%d", a.config.ServerPort),
+		Handler:     a.router,
+		IdleTimeout: 30 * time.Second,
 	}
 
 	defer func() {
