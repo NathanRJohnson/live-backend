@@ -3,6 +3,7 @@ package item
 import (
 	"context"
 	"log"
+	"strconv"
 
 	"cloud.google.com/go/firestore"
 	"github.com/NathanRJohnson/live-backend/wtfridge/model"
@@ -14,7 +15,7 @@ type FirebaseRepo struct {
 }
 
 func (r *FirebaseRepo) Insert(ctx context.Context, item model.Item) error {
-	_, _, err := r.Client.Collection("fridge").Add(ctx, item)
+	_, err := r.Client.Collection("fridge").Doc(strconv.Itoa(item.ItemID)).Set(ctx, item)
 	if err != nil {
 		log.Fatalf("Failed adding item: %v", err)
 	}
@@ -43,4 +44,13 @@ func (r *FirebaseRepo) FetchAll(ctx context.Context) ([]model.Item, error) {
 		items = append(items, item)
 	}
 	return items, nil
+}
+
+func (r *FirebaseRepo) DeleteByID(ctx context.Context, item model.Item) error {
+	_, err := r.Client.Collection("fridge").Doc(strconv.Itoa(item.ItemID)).Delete(ctx)
+	if err != nil {
+		log.Fatalf("unable to delete item: %v", err)
+		return err
+	}
+	return nil
 }
