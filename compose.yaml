@@ -6,7 +6,7 @@ services:
       context: proxy
       target: builder
     ports:
-      - 8000:80
+      - 80:80
     depends_on:
       - fridge-api
 

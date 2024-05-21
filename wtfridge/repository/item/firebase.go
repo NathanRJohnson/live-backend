@@ -14,8 +14,8 @@ type FirebaseRepo struct {
 	Client *firestore.Client
 }
 
-func (r *FirebaseRepo) Insert(ctx context.Context, item model.Item) error {
-	_, err := r.Client.Collection("fridge").Doc(strconv.Itoa(item.ItemID)).Set(ctx, item)
+func (r *FirebaseRepo) Insert(ctx context.Context, collection string, item model.Item) error {
+	_, err := r.Client.Collection(collection).Doc(strconv.Itoa(item.GetID())).Set(ctx, item)
 	if err != nil {
 		log.Fatalf("Failed adding item: %v", err)
 	}
@@ -23,9 +23,9 @@ func (r *FirebaseRepo) Insert(ctx context.Context, item model.Item) error {
 	return nil
 }
 
-func (r *FirebaseRepo) FetchAll(ctx context.Context) ([]model.Item, error) {
-	var items []model.Item
-	iter := r.Client.Collection("fridge").Documents(ctx)
+func (r *FirebaseRepo) FetchAll(ctx context.Context, collection string) ([]interface{}, error) {
+	var items []interface{}
+	iter := r.Client.Collection(collection).Documents(ctx)
 
 	for {
 		doc, err := iter.Next()
@@ -36,21 +36,38 @@ func (r *FirebaseRepo) FetchAll(ctx context.Context) ([]model.Item, error) {
 			return nil, err
 		}
 
-		var item model.Item
+		// gets empty item
+		item := getItemSchemaByCollection(collection)
+		if item == nil {
+			log.Fatal("error getting item schema for collection:", collection)
+		}
+		// fills item with document data
 		err = doc.DataTo(&item)
 		if err != nil {
-			log.Fatalf("error unmarhsalling document to item representation: %v", err)
+			log.Fatalf("error unmarshalling document to item representation: %v", err)
 		}
+
 		items = append(items, item)
 	}
 	return items, nil
 }
 
-func (r *FirebaseRepo) DeleteByID(ctx context.Context, item model.Item) error {
-	_, err := r.Client.Collection("fridge").Doc(strconv.Itoa(item.ItemID)).Delete(ctx)
+func (r *FirebaseRepo) DeleteByID(ctx context.Context, collection string, item model.Item) error {
+	_, err := r.Client.Collection(collection).Doc(strconv.Itoa(item.GetID())).Delete(ctx)
 	if err != nil {
 		log.Fatalf("unable to delete item: %v", err)
 		return err
 	}
 	return nil
+}
+
+func getItemSchemaByCollection(collection string) interface{} {
+	switch collection {
+	case "fridge":
+		return &model.FridgeItem{}
+	case "grocery":
+		return &model.GroceryItem{}
+	default:
+		return nil
+	}
 }
