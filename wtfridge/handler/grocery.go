@@ -3,6 +3,7 @@ package handler
 import (
 	"encoding/json"
 	"fmt"
+	"log"
 	"net/http"
 	"strconv"
 
@@ -55,8 +56,8 @@ func (g *Grocery) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	w.Write(res)
 	w.WriteHeader(http.StatusCreated)
+	w.Write(res)
 }
 
 func (g *Grocery) List(w http.ResponseWriter, r *http.Request) {
@@ -74,7 +75,6 @@ func (g *Grocery) List(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Write(res)
-	w.WriteHeader(http.StatusOK)
 }
 
 func (g *Grocery) DeleteByID(w http.ResponseWriter, r *http.Request) {
@@ -106,4 +106,22 @@ func (g *Grocery) DeleteByID(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Write(res)
+}
+
+func (g *Grocery) SetActiveByID(w http.ResponseWriter, r *http.Request) {
+	log.Println("Change active state")
+
+	id, err := strconv.Atoi(r.PathValue("id"))
+	if err != nil {
+		log.Println("failed to convert id to integer: ", err)
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	err = g.Repo.ToggleActiveByID(r.Context(), "grocery", id)
+	if err != nil {
+		log.Println("failed to toggle active state")
+		return
+	}
+
 }

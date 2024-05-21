@@ -61,6 +61,42 @@ func (r *FirebaseRepo) DeleteByID(ctx context.Context, collection string, item m
 	return nil
 }
 
+// TODO: update this to take any path and any value
+func (r *FirebaseRepo) ToggleActiveByID(ctx context.Context, collection string, id int) error {
+	ref := r.Client.Collection(collection).Doc(strconv.Itoa(id))
+	err := r.Client.RunTransaction(ctx, func(ctx context.Context, tx *firestore.Transaction) error {
+		doc, err := tx.Get(ref)
+		if err != nil {
+			log.Printf("unable to get %d from %s", id, collection)
+			return err
+		}
+
+		data, err := doc.DataAt("IsActive")
+		if err != nil {
+			log.Printf("unable to read is_active field: %v", err)
+			return err
+		}
+
+		is_active, ok := data.(bool)
+		if !ok {
+			log.Printf("unable to convert data to bool")
+			is_active = false
+		}
+
+		updates := []firestore.Update{
+			{Path: "IsActive", Value: !is_active},
+		}
+
+		return tx.Update(ref, updates)
+	})
+
+	if err != nil {
+		log.Printf("unable to toggle activitiy: %v", err)
+	}
+
+	return err
+}
+
 func getItemSchemaByCollection(collection string) interface{} {
 	switch collection {
 	case "fridge":
