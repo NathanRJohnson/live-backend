@@ -3,7 +3,9 @@ package item
 import (
 	"context"
 	"log"
+	"path/filepath"
 	"strconv"
+	"time"
 
 	"cloud.google.com/go/firestore"
 	"github.com/NathanRJohnson/live-backend/wtfridge/model"
@@ -93,6 +95,57 @@ func (r *FirebaseRepo) ToggleActiveByID(ctx context.Context, collection string, 
 	if err != nil {
 		log.Printf("unable to toggle activitiy: %v", err)
 	}
+
+	return err
+}
+
+func (r *FirebaseRepo) MoveToFridge(ctx context.Context) error {
+	active_doc_refs := r.Client.Collection("grocery").Where("IsActive", "==", true).Documents(ctx)
+	fridge_ref := r.Client.Collection("fridge")
+
+	err := r.Client.RunTransaction(ctx, func(ctx context.Context, tx *firestore.Transaction) error {
+		for {
+			doc, err := active_doc_refs.Next()
+			if err == iterator.Done {
+				return nil
+			} else if err != nil {
+				log.Printf("could not iterate through docs: %v", err)
+				return err
+			}
+
+			var grocery_item model.GroceryItem
+			err = doc.DataTo(&grocery_item)
+			if err != nil {
+				log.Printf("unable to marshal data to grocery schema: %v", err)
+				return err
+			}
+
+			err = tx.Delete(doc.Ref)
+			if err != nil {
+				log.Printf("unable to delete document %s: %v", doc.Ref.ID, err)
+				return err
+			}
+
+			now := time.Now().UTC()
+			fridge_item := model.FridgeItem{
+				ItemID:    grocery_item.ItemID,
+				Name:      grocery_item.Name,
+				DateAdded: &now,
+			}
+
+			fridge_item_ref := firestore.DocumentRef{
+				Parent: fridge_ref,
+				Path:   filepath.Join(fridge_ref.Path, strconv.Itoa(grocery_item.ItemID)),
+				ID:     strconv.Itoa(grocery_item.ItemID),
+			}
+
+			err = tx.Create(&fridge_item_ref, fridge_item)
+			if err != nil {
+				log.Printf("unable to create fridge item %s: %v", fridge_item.Name, err)
+				return err
+			}
+		}
+	})
 
 	return err
 }

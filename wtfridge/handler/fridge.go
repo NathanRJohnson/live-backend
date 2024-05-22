@@ -78,7 +78,6 @@ func (i *Item) List(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Write(res)
-	w.WriteHeader(http.StatusOK)
 }
 
 func (i *Item) GetByID(w http.ResponseWriter, r *http.Request) {
