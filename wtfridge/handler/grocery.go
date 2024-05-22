@@ -123,5 +123,13 @@ func (g *Grocery) SetActiveByID(w http.ResponseWriter, r *http.Request) {
 		log.Println("failed to toggle active state")
 		return
 	}
+}
 
+func (g *Grocery) MoveToFridge(w http.ResponseWriter, r *http.Request) {
+	log.Println("Move items to fridge")
+
+	err := g.Repo.MoveToFridge(r.Context())
+	if err != nil {
+		log.Printf("failed to move grocery items to fridge: %v", err)
+	}
 }
