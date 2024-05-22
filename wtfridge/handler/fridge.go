@@ -3,6 +3,7 @@ package handler
 import (
 	"encoding/json"
 	"fmt"
+	"log"
 	"net/http"
 	"strconv"
 	"time"
@@ -118,4 +119,13 @@ func (i *Item) DeleteByID(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Write(res)
+}
+
+func (i *Item) MoveToGroceries(w http.ResponseWriter, r *http.Request) {
+	fmt.Println("Move to groceries")
+	id := r.PathValue("id")
+	err := i.Repo.MoveToGroceries(r.Context(), id)
+	if err != nil {
+		log.Printf("failed to move fridge items to grocery: %v", err)
+	}
 }
