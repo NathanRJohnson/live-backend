@@ -150,48 +150,6 @@ func (r *FirebaseRepo) MoveToFridge(ctx context.Context) error {
 	return err
 }
 
-func (r *FirebaseRepo) MoveToGroceries(ctx context.Context, id string) error {
-	ref := r.Client.Collection("fridge").Doc(id)
-	grocery_ref := r.Client.Collection("grocery")
-	err := r.Client.RunTransaction(ctx, func(ctx context.Context, tx *firestore.Transaction) error {
-		doc, err := tx.Get(ref)
-		if err != nil {
-			log.Printf("unable to get %s from %s", id, "fridge")
-			return err
-		}
-
-		// data to fridge_item
-		var fridge_item model.FridgeItem
-		err = doc.DataTo(&fridge_item)
-		if err != nil {
-			log.Printf("unable to marshal data to fridge schema: %v", err)
-			return err
-		}
-
-		err = tx.Delete(doc.Ref)
-		if err != nil {
-			log.Printf("unable to delete document %s: %v", doc.Ref.ID, err)
-			return err
-		}
-
-		grocery_item := model.GroceryItem{
-			ItemID:   fridge_item.ItemID,
-			Name:     fridge_item.Name,
-			IsActive: false,
-		}
-
-		grocery_item_ref := firestore.DocumentRef{
-			Parent: grocery_ref,
-			Path:   filepath.Join(grocery_ref.Path, strconv.Itoa(fridge_item.ItemID)),
-			ID:     strconv.Itoa(fridge_item.ItemID),
-		}
-
-		return tx.Create(&grocery_item_ref, grocery_item)
-	})
-
-	return err
-}
-
 func getItemSchemaByCollection(collection string) interface{} {
 	switch collection {
 	case "fridge":
