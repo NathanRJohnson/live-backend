@@ -30,7 +30,6 @@ func (a *App) loadFridgeRoutes(router *http.ServeMux) {
 		},
 	}
 	router.HandleFunc("POST /", fridgeHandler.Create)
-	router.HandleFunc("POST /to_grocery/{id}", fridgeHandler.MoveToGroceries)
 	router.HandleFunc("GET /", fridgeHandler.List)
 	// router.HandleFunc("GET /{id}", fridgeHandler.GetByID)
 	// router.HandleFunc("PUT /{id}", fridgeHandler.UpdateByID)
