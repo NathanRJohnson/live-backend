@@ -22,6 +22,7 @@ func (g *Grocery) Create(w http.ResponseWriter, r *http.Request) {
 		ItemID   int    `json:"item_id"`
 		Name     string `json:"item_name"`
 		IsActive bool   `json:"is_active"`
+		Index    int    `json:"index"`
 	}
 
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
@@ -30,9 +31,9 @@ func (g *Grocery) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if body.ItemID == 0 || body.Name == "" {
+	if body.ItemID == 0 || body.Name == "" || body.Index < 1 {
 		w.WriteHeader(http.StatusBadRequest)
-		fmt.Println("item_name or item_is is missing or 0")
+		fmt.Println("required field is missing")
 		return
 	}
 
@@ -40,6 +41,7 @@ func (g *Grocery) Create(w http.ResponseWriter, r *http.Request) {
 		ItemID:   body.ItemID,
 		Name:     body.Name,
 		IsActive: body.IsActive,
+		Index:    body.Index,
 	}
 
 	err := g.Repo.Insert(r.Context(), "grocery", item)
