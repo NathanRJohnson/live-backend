@@ -135,3 +135,29 @@ func (g *Grocery) MoveToFridge(w http.ResponseWriter, r *http.Request) {
 		log.Printf("failed to move grocery items to fridge: %v", err)
 	}
 }
+
+func (g *Grocery) RearrageItems(w http.ResponseWriter, r *http.Request) {
+	log.Println("Rearrage items")
+
+	var body struct {
+		OldIndex int64 `json:"old_index"`
+		NewIndex int64 `json:"new_index"`
+	}
+
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		fmt.Println("error unmarshaling requst:", err)
+		return
+	}
+
+	if body.OldIndex == body.NewIndex || body.OldIndex <= 0 || body.NewIndex <= 0 {
+		w.WriteHeader(http.StatusBadRequest)
+		fmt.Println("indicies must be > 0 and not equal")
+		return
+	}
+
+	err := g.Repo.RearrageItems(r.Context(), "grocery", body.OldIndex, body.NewIndex)
+	if err != nil {
+		log.Printf("failed to rearrage items: %v", err)
+	}
+}

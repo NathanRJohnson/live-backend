@@ -47,4 +47,5 @@ func (a *App) loadGroceryRoutes(router *http.ServeMux) {
 	router.HandleFunc("GET /", groceryHandler.List)
 	router.HandleFunc("DELETE /{id}", groceryHandler.DeleteByID)
 	router.HandleFunc("PATCH /{id}", groceryHandler.SetActiveByID)
+	router.HandleFunc("PATCH /", groceryHandler.RearrageItems)
 }

@@ -2,12 +2,14 @@ package item
 
 import (
 	"context"
+	"errors"
 	"log"
 	"path/filepath"
 	"strconv"
 	"time"
 
 	"cloud.google.com/go/firestore"
+	"cloud.google.com/go/firestore/apiv1/firestorepb"
 	"github.com/NathanRJohnson/live-backend/wtfridge/model"
 	"google.golang.org/api/iterator"
 )
@@ -83,6 +85,7 @@ func (r *FirebaseRepo) ToggleActiveByID(ctx context.Context, collection string, 
 		if !ok {
 			log.Printf("unable to convert data to bool")
 			is_active = false
+			return errors.New("unable to convert data to bool")
 		}
 
 		updates := []firestore.Update{
@@ -147,6 +150,75 @@ func (r *FirebaseRepo) MoveToFridge(ctx context.Context) error {
 		}
 	})
 
+	return err
+}
+
+func (r *FirebaseRepo) RearrageItems(ctx context.Context, collection string, old_index int64, new_index int64) error {
+	var docs firestore.Query
+	var incr int64
+
+	query := r.Client.Collection(collection).NewAggregationQuery().WithCount("all")
+	results, err := query.Get(ctx)
+	if err != nil {
+		return err
+	}
+
+	count, ok := results["all"]
+	if !ok {
+		return errors.New("firestore: couldn't get alias for COUNT from results")
+	}
+
+	// makes sure the user doesn't send a request placing the item at an index beyond the size of the list
+	max_index := count.(*firestorepb.Value).GetIntegerValue()
+	if new_index > max_index || old_index > max_index {
+		return errors.New("indicies exceed max index")
+	}
+
+	if new_index < old_index { // moved up
+		docs = r.Client.Collection(collection).Where("Index", ">=", new_index).Where("Index", "<=", old_index)
+		incr = 1
+
+	} else {
+		docs = r.Client.Collection(collection).Where("Index", "<=", new_index).Where("Index", ">=", old_index)
+		incr = -1
+	}
+
+	iter := docs.Documents(ctx)
+	err = r.Client.RunTransaction(ctx, func(ctx context.Context, tx *firestore.Transaction) error {
+		for {
+			doc, err := iter.Next()
+			if err == iterator.Done {
+				return nil
+			} else if err != nil {
+				log.Printf("could not iterate through docs: %v", err)
+				return err
+			}
+
+			data, err := doc.DataAt("Index")
+			if err != nil {
+				log.Printf("unable to read is_active field: %v", err)
+				return err
+			}
+
+			index, ok := data.(int64)
+			if !ok {
+				log.Printf("unable to convert index to int")
+				index = -1
+				return errors.New("unable to convert index to int")
+			}
+
+			if index == old_index {
+				updates := []firestore.Update{{Path: "Index", Value: new_index}}
+				err = tx.Update(doc.Ref, updates)
+			} else {
+				updates := []firestore.Update{{Path: "Index", Value: index + incr}}
+				err = tx.Update(doc.Ref, updates)
+			}
+			if err != nil {
+				return err
+			}
+		}
+	})
 	return err
 }
 
