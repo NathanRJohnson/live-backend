@@ -22,6 +22,7 @@ func (g *Grocery) Create(w http.ResponseWriter, r *http.Request) {
 		ItemID   int    `json:"item_id"`
 		Name     string `json:"item_name"`
 		IsActive bool   `json:"is_active"`
+		Index    int    `json:"index"`
 	}
 
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
@@ -30,9 +31,9 @@ func (g *Grocery) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if body.ItemID == 0 || body.Name == "" {
+	if body.ItemID == 0 || body.Name == "" || body.Index < 1 {
 		w.WriteHeader(http.StatusBadRequest)
-		fmt.Println("item_name or item_is is missing or 0")
+		fmt.Println("required field is missing")
 		return
 	}
 
@@ -40,6 +41,7 @@ func (g *Grocery) Create(w http.ResponseWriter, r *http.Request) {
 		ItemID:   body.ItemID,
 		Name:     body.Name,
 		IsActive: body.IsActive,
+		Index:    body.Index,
 	}
 
 	err := g.Repo.Insert(r.Context(), "grocery", item)
@@ -131,5 +133,31 @@ func (g *Grocery) MoveToFridge(w http.ResponseWriter, r *http.Request) {
 	err := g.Repo.MoveToFridge(r.Context())
 	if err != nil {
 		log.Printf("failed to move grocery items to fridge: %v", err)
+	}
+}
+
+func (g *Grocery) RearrageItems(w http.ResponseWriter, r *http.Request) {
+	log.Println("Rearrage items")
+
+	var body struct {
+		OldIndex int64 `json:"old_index"`
+		NewIndex int64 `json:"new_index"`
+	}
+
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		fmt.Println("error unmarshaling requst:", err)
+		return
+	}
+
+	if body.OldIndex == body.NewIndex || body.OldIndex <= 0 || body.NewIndex <= 0 {
+		w.WriteHeader(http.StatusBadRequest)
+		fmt.Println("indicies must be > 0 and not equal")
+		return
+	}
+
+	err := g.Repo.RearrageItems(r.Context(), "grocery", body.OldIndex, body.NewIndex)
+	if err != nil {
+		log.Printf("failed to rearrage items: %v", err)
 	}
 }
