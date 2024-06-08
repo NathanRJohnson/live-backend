@@ -99,23 +99,12 @@ func (i *Item) DeleteByID(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	item := model.FridgeItem{
-		ItemID: id,
-	}
-
-	err = i.Repo.DeleteByID(r.Context(), "fridge", item)
+	err = i.Repo.DeleteByID(r.Context(), "fridge", id)
 	if err != nil {
 		fmt.Println("failed to delete:", err)
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
 
-	res, err := json.Marshal(item)
-	if err != nil {
-		fmt.Println("failed to marshal:", err)
-		w.WriteHeader(http.StatusInternalServerError)
-		return
-	}
-
-	w.Write(res)
+	w.WriteHeader(http.StatusOK)
 }
