@@ -89,25 +89,14 @@ func (g *Grocery) DeleteByID(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	item := model.GroceryItem{
-		ItemID: id,
-	}
-
-	err = g.Repo.DeleteByID(r.Context(), "grocery", item)
+	err = g.Repo.DeleteByID(r.Context(), "grocery", id)
 	if err != nil {
 		fmt.Println("failed to delete:", err)
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
 
-	res, err := json.Marshal(item)
-	if err != nil {
-		fmt.Println("failed to marshal:", err)
-		w.WriteHeader(http.StatusInternalServerError)
-		return
-	}
-
-	w.Write(res)
+	w.WriteHeader(http.StatusOK)
 }
 
 func (g *Grocery) SetActiveByID(w http.ResponseWriter, r *http.Request) {
