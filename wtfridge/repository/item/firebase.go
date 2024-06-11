@@ -126,6 +126,24 @@ func (r *FirebaseRepo) ToggleActiveByID(ctx context.Context, collection string, 
 	return err
 }
 
+func (r *FirebaseRepo) UpdateNameByID(ctx context.Context, collection string, id int, new_name string) error {
+	ref := r.Client.Collection(collection).Doc(strconv.Itoa(id))
+	err := r.Client.RunTransaction(ctx, func(ctx context.Context, tx *firestore.Transaction) error {
+
+		updates := []firestore.Update{
+			{Path: "Name", Value: new_name},
+		}
+
+		return tx.Update(ref, updates)
+	})
+
+	if err != nil {
+		log.Printf("unable to update item name: %v", err)
+	}
+
+	return err
+}
+
 func (r *FirebaseRepo) MoveToFridge(ctx context.Context) error {
 	active_doc_refs := r.Client.Collection("grocery").Where("IsActive", "==", true).Documents(ctx)
 	fridge_ref := r.Client.Collection("fridge")
