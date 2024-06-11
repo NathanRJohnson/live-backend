@@ -116,6 +116,35 @@ func (g *Grocery) SetActiveByID(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+func (g *Grocery) UpdateNameByID(w http.ResponseWriter, r *http.Request) {
+	log.Println("Update item name")
+
+	var body struct {
+		ItemID  int    `json:"item_id"`
+		NewName string `json:"new_name"`
+	}
+
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		fmt.Println("error unmarshaling requst:", err)
+		return
+	}
+
+	if body.ItemID <= 0 || body.NewName == "" {
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+
+	err := g.Repo.UpdateNameByID(r.Context(), "grocery", body.ItemID, body.NewName)
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	w.WriteHeader(http.StatusOK)
+
+}
+
 func (g *Grocery) MoveToFridge(w http.ResponseWriter, r *http.Request) {
 	log.Println("Move items to fridge")
 
