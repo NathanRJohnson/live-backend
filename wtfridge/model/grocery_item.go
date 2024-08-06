@@ -5,6 +5,8 @@ type GroceryItem struct {
 	Name     string `json:"item_name"`
 	IsActive bool   `json:"is_active"`
 	Index    int    `json:"index"`
+	Quantity int    `json:"quantity"`
+	Notes    string `json:"notes"`
 }
 
 func (g GroceryItem) GetID() int {

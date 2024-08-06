@@ -18,8 +18,10 @@ type Item struct {
 func (i *Item) Create(w http.ResponseWriter, r *http.Request) {
 	fmt.Println("Create an item")
 	var body struct {
-		ItemID int    `json:"item_id"`
-		Name   string `json:"item_name"`
+		ItemID   int    `json:"item_id"`
+		Name     string `json:"item_name"`
+		Quantity int    `json:"quantity"`
+		Notes    string `json:"notes"`
 	}
 
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
@@ -35,11 +37,19 @@ func (i *Item) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if body.Quantity <= 0 {
+		w.WriteHeader(http.StatusBadRequest)
+		fmt.Println("quantatiy must exceed 0")
+		return
+	}
+
 	now := time.Now().UTC()
 
 	item := model.FridgeItem{
 		ItemID:    body.ItemID,
 		Name:      body.Name,
+		Quantity:  body.Quantity,
+		Notes:     body.Notes,
 		DateAdded: &now,
 	}
 
