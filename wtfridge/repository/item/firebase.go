@@ -181,6 +181,8 @@ func (r *FirebaseRepo) MoveToFridge(ctx context.Context) error {
 				ItemID:    grocery_item.ItemID,
 				Name:      grocery_item.Name,
 				DateAdded: &now,
+				Quantity:  grocery_item.Quantity,
+				Notes:     grocery_item.Notes,
 			}
 
 			fridge_item_ref := firestore.DocumentRef{
