@@ -23,6 +23,8 @@ func (g *Grocery) Create(w http.ResponseWriter, r *http.Request) {
 		Name     string `json:"item_name"`
 		IsActive bool   `json:"is_active"`
 		Index    int    `json:"index"`
+		Quantity int    `json:"quantity"`
+		Notes    string `json:"notes"`
 	}
 
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
@@ -42,6 +44,8 @@ func (g *Grocery) Create(w http.ResponseWriter, r *http.Request) {
 		Name:     body.Name,
 		IsActive: body.IsActive,
 		Index:    body.Index,
+		Quantity: body.Quantity,
+		Notes:    body.Notes,
 	}
 
 	err := g.Repo.Insert(r.Context(), "grocery", item)
