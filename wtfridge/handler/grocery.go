@@ -116,12 +116,14 @@ func (g *Grocery) SetActiveByID(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func (g *Grocery) UpdateNameByID(w http.ResponseWriter, r *http.Request) {
-	log.Println("Update item name")
+func (g *Grocery) UpdateByID(w http.ResponseWriter, r *http.Request) {
+	log.Println("Update by ID")
 
 	var body struct {
-		ItemID  int    `json:"item_id"`
-		NewName string `json:"new_name"`
+		ItemID      int    `json:"item_id"`
+		NewName     string `json:"new_name"`
+		NewQuantity int    `json:"new_quantity"`
+		NewNotes    string `json:"new_notes"`
 	}
 
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
@@ -130,12 +132,18 @@ func (g *Grocery) UpdateNameByID(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if body.ItemID <= 0 || body.NewName == "" {
+	if body.ItemID <= 0 || body.NewName == "" || body.NewQuantity <= 0 {
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
 
-	err := g.Repo.UpdateNameByID(r.Context(), "grocery", body.ItemID, body.NewName)
+	new_values := map[string]interface{}{
+		"Name":     body.NewName,
+		"Quantity": body.NewQuantity,
+		"Notes":    body.NewNotes,
+	}
+
+	err := g.Repo.UpdateItemByID(r.Context(), "grocery", body.ItemID, new_values)
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		return
