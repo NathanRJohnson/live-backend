@@ -126,19 +126,21 @@ func (r *FirebaseRepo) ToggleActiveByID(ctx context.Context, collection string, 
 	return err
 }
 
-func (r *FirebaseRepo) UpdateNameByID(ctx context.Context, collection string, id int, new_name string) error {
-	ref := r.Client.Collection(collection).Doc(strconv.Itoa(id))
+func (r *FirebaseRepo) UpdateItemByID(ctx context.Context, collection string, item_id int, item_values map[string]interface{}) error {
+	ref := r.Client.Collection(collection).Doc(strconv.Itoa(item_id))
 	err := r.Client.RunTransaction(ctx, func(ctx context.Context, tx *firestore.Transaction) error {
 
-		updates := []firestore.Update{
-			{Path: "Name", Value: new_name},
+		var updates []firestore.Update
+
+		for path, new_value := range item_values {
+			updates = append(updates, firestore.Update{Path: path, Value: new_value})
 		}
 
 		return tx.Update(ref, updates)
 	})
 
 	if err != nil {
-		log.Printf("unable to update item name: %v", err)
+		log.Printf("unable to update item: %v", err)
 	}
 
 	return err

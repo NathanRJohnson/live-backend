@@ -3,6 +3,7 @@ package handler
 import (
 	"encoding/json"
 	"fmt"
+	"log"
 	"net/http"
 	"strconv"
 	"time"
@@ -33,13 +34,13 @@ func (i *Item) Create(w http.ResponseWriter, r *http.Request) {
 	// missing id
 	if body.ItemID == 0 || body.Name == "" {
 		w.WriteHeader(http.StatusBadRequest)
-		fmt.Println("item_name or item_is is missing or 0")
+		log.Println("item_name or item_is is missing or 0")
 		return
 	}
 
 	if body.Quantity <= 0 {
 		w.WriteHeader(http.StatusBadRequest)
-		fmt.Println("quantatiy must exceed 0")
+		log.Println("quantity must exceed 0")
 		return
 	}
 
@@ -97,6 +98,41 @@ func (i *Item) GetByID(w http.ResponseWriter, r *http.Request) {
 
 func (i *Item) UpdateByID(w http.ResponseWriter, r *http.Request) {
 	fmt.Println("Update an item by ID")
+
+	var body struct {
+		ItemID       int        `json:"item_id"`
+		NewName      string     `json:"new_name"`
+		NewQuantity  int        `json:"new_quantity"`
+		NewNotes     string     `json:"new_notes"`
+		NewDateAdded *time.Time `json:"new_date"`
+	}
+
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		fmt.Println("error unmarshaling requst:", err)
+		return
+	}
+
+	if body.ItemID <= 0 || body.NewName == "" || body.NewQuantity <= 0 {
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+
+	new_values := map[string]interface{}{
+		"Name":      body.NewName,
+		"Quantity":  body.NewQuantity,
+		"Notes":     body.NewNotes,
+		"DateAdded": body.NewDateAdded,
+	}
+
+	err := i.Repo.UpdateItemByID(r.Context(), "fridge", body.ItemID, new_values)
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	w.WriteHeader(http.StatusOK)
+
 }
 
 func (i *Item) DeleteByID(w http.ResponseWriter, r *http.Request) {
