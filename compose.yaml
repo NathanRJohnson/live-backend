@@ -19,9 +19,20 @@ services:
     secrets:
       - serviceKey
 
+  finance-api:
+    container_name: finance-api
+    image: finance-api:local
+    build: 
+      context: wtfinance
+      target: builder
+    secrets:
+      - googleSheets
+
 secrets:
   serviceKey:
     file: ./secrets/firebase-serviceKey.json
+  googleSheets:
+    file: ./secrets/gsheets-serviceKey.json
 
   
   # goals-api:
