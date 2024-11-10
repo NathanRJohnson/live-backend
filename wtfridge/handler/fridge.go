@@ -101,10 +101,10 @@ func (i *Item) UpdateByID(w http.ResponseWriter, r *http.Request) {
 
 	var body struct {
 		ItemID       int        `json:"item_id"`
-		NewName      string     `json:"new_name"`
-		NewQuantity  int        `json:"new_quantity"`
-		NewNotes     string     `json:"new_notes"`
-		NewDateAdded *time.Time `json:"new_date"`
+		NewName      *string    `json:"new_name,omitempty"`
+		NewQuantity  *int       `json:"new_quantity,omitempty"`
+		NewNotes     *string    `json:"new_notes,omitempty"`
+		NewDateAdded *time.Time `json:"new_date,omitempty"`
 	}
 
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
@@ -113,16 +113,37 @@ func (i *Item) UpdateByID(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if body.ItemID <= 0 || body.NewName == "" || body.NewQuantity <= 0 {
+	if body.ItemID <= 0 {
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
 
-	new_values := map[string]interface{}{
-		"Name":      body.NewName,
-		"Quantity":  body.NewQuantity,
-		"Notes":     body.NewNotes,
-		"DateAdded": body.NewDateAdded,
+	new_values := make(map[string]interface{})
+
+	if body.NewName != nil {
+		if *body.NewName != "" {
+			new_values["Name"] = *body.NewName
+		} else {
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+	}
+
+	if body.NewQuantity != nil {
+		if *body.NewQuantity > 0 {
+			new_values["Quantity"] = *body.NewQuantity
+		} else {
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+	}
+
+	if body.NewNotes != nil {
+		new_values["Notes"] = *body.NewNotes
+	}
+
+	if body.NewDateAdded != nil {
+		new_values["DateAdded"] = body.NewDateAdded
 	}
 
 	err := i.Repo.UpdateItemByID(r.Context(), "fridge", body.ItemID, new_values)
