@@ -23,7 +23,7 @@ func LoadConfig() Config {
 	// local config init
 	cfg := Config{
 		ServerPort:  3000,
-		SecretsPath: filepath.Join(currentDir, "../secrets/firebase-serviceKey.json"),
+		SecretsPath: filepath.Join(currentDir, "../secrets/gsheets-serviceKey.json"),
 	}
 
 	// load variables from docker environment

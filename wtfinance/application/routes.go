@@ -13,7 +13,7 @@ func (a *App) loadRoutes() {
 	transactionRouter := http.NewServeMux()
 	a.loadTransactionRoutes(transactionRouter)
 
-	router.Handle("/transaction/", http.StripPrefix("/transaction", transactionRouter))
+	router.Handle("/finance/", http.StripPrefix("/finance", transactionRouter))
 	a.router = router
 }
 
@@ -24,4 +24,7 @@ func (a *App) loadTransactionRoutes(router *http.ServeMux) {
 		},
 	}
 	router.HandleFunc("POST /", transactionHandler.Create)
+	router.HandleFunc("GET /", transactionHandler.History)
+	router.HandleFunc("GET /circle", transactionHandler.CircleValues)
+
 }

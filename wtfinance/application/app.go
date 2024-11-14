@@ -20,7 +20,6 @@ type App struct {
 func New(ctx context.Context, cfg Config) (*App, error) {
 	// Initialize the Sheets API client
 	service, err := sheets.NewService(ctx, option.WithCredentialsJSON(cfg.ServiceKey))
-	log.Println("Service initialized: ", service.Spreadsheets.Sheets)
 	if err != nil {
 		log.Fatalf("Unable to create Sheets service: %v", err)
 	}

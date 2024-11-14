@@ -9,6 +9,7 @@ services:
       - 80:80
     depends_on:
       - fridge-api
+      - finance-api
 
   fridge-api:
     container_name: fridge-api

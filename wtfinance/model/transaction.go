@@ -7,5 +7,4 @@ type Transaction struct {
 	Name        string     `json:"name"`
 	Amount      float32    `json:"amount"`
 	Category    string     `json:"category"`
-	SheetRef    string     `json:"sheet"`
 }
