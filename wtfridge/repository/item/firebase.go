@@ -7,6 +7,7 @@ import (
 	"log"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"time"
 
 	"cloud.google.com/go/firestore"
@@ -19,18 +20,62 @@ type FirebaseRepo struct {
 	Client *firestore.Client
 }
 
-func (r *FirebaseRepo) Insert(ctx context.Context, collection string, item model.Item) error {
-	_, err := r.Client.Collection(collection).Doc(strconv.Itoa(item.GetID())).Set(ctx, item)
+func (r *FirebaseRepo) GetDocRef(collection *firestore.CollectionRef, doc string) *firestore.DocumentRef {
+	return collection.Doc(doc)
+}
+
+func (r *FirebaseRepo) GetCollectionRef(collection string, doc *firestore.DocumentRef) *firestore.CollectionRef {
+	var collectionRef *firestore.CollectionRef = nil
+	if doc == nil {
+		collectionRef = r.Client.Collection(collection)
+	} else {
+		collectionRef = doc.Collection(collection)
+	}
+	return collectionRef
+}
+
+// func (r *FirebaseRepo) getUserDocRef(ctx context.Context, user model.User) (*firestore.DocumentRef, error) {
+// 	userDocRef := r.Client.Collection("USER").Doc(user.Username)
+// 	if !docExists(ctx, userDocRef) {
+// 		return nil, errors.New("could not get user doc")
+// 	}
+// 	return userDocRef, nil
+// }
+
+func (r *FirebaseRepo) DocExists(ctx context.Context, doc *firestore.DocumentRef) (bool, error) {
+	snapshot, err := doc.Get(ctx)
 	if err != nil {
-		log.Fatalf("Failed adding item: %v", err)
+		return false, err
+	}
+	return snapshot.Exists(), nil
+}
+
+func (r *FirebaseRepo) Insert(ctx context.Context, collection interface{}, data map[string]interface{}) error {
+	var collectionRef *firestore.CollectionRef
+	if c, ok := collection.(*firestore.CollectionRef); !ok {
+		return errors.New("must pass interface of type firestoreCollectionRef into Insert")
+	} else {
+		collectionRef = c
+	}
+
+	_, _, err := collectionRef.Add(ctx, data)
+	if err != nil {
+		log.Printf("Failed adding item: %v", err)
 	}
 
 	return nil
 }
 
-func (r *FirebaseRepo) FetchAll(ctx context.Context, collection string) ([]interface{}, error) {
+func (r *FirebaseRepo) FetchAll(ctx context.Context, collection interface{}) ([]interface{}, error) {
+	var collectionRef *firestore.CollectionRef
+	if c, ok := collection.(*firestore.CollectionRef); !ok {
+		return nil, errors.New("must pass interface of type firestoreCollectionRef into FetchAll")
+	} else {
+		collectionRef = c
+	}
+
 	var items []interface{}
-	iter := r.Client.Collection(collection).Documents(ctx)
+	iter := collectionRef.Documents(ctx)
 
 	for {
 		doc, err := iter.Next()
@@ -42,31 +87,42 @@ func (r *FirebaseRepo) FetchAll(ctx context.Context, collection string) ([]inter
 		}
 
 		// gets empty item
-		item := getItemSchemaByCollection(collection)
-		if item == nil {
+		schema := getItemSchemaFromCollection(collectionRef.Path)
+		if schema == nil {
 			log.Fatal("error getting item schema for collection:", collection)
 		}
 		// fills item with document data
-		err = doc.DataTo(&item)
+		err = doc.DataTo(&schema)
 		if err != nil {
 			log.Fatalf("error unmarshalling document to item representation: %v", err)
 		}
 
-		items = append(items, item)
+		items = append(items, schema)
 	}
 	return items, nil
 }
 
-func (r *FirebaseRepo) DeleteByID(ctx context.Context, collection string, id int) error {
-	ref := r.Client.Collection(collection).Doc(strconv.Itoa(id))
+func (r *FirebaseRepo) DeleteByID(ctx context.Context, collection interface{}, id int) error {
+	var collectionRef *firestore.CollectionRef
+	if c, ok := collection.(*firestore.CollectionRef); !ok {
+		return errors.New("must pass interface of type firestoreCollectionRef into DeleteByID")
+	} else {
+		collectionRef = c
+	}
+
+	docs, err := collectionRef.Where("ItemID", "==", id).Documents(ctx).GetAll()
+	if err != nil {
+		return err
+	} else if len(docs) == 0 {
+		return errors.New("failed to delete document: not found")
+	} else if len(docs) > 1 {
+		return errors.New("failed to delete document: multiple documents found with matching IDs")
+	}
+
+	doc := docs[0]
 
 	// shift indicies up to account for the deleted item
-	if collection == "grocery" {
-		doc, err := ref.Get(ctx)
-		if err != nil {
-			return err
-		}
-
+	if strings.ToUpper(collectionRef.ID) == "GROCERY" {
 		data, err := doc.DataAt("Index")
 		if err != nil {
 			return err
@@ -74,13 +130,13 @@ func (r *FirebaseRepo) DeleteByID(ctx context.Context, collection string, id int
 
 		removed_index, _ := data.(int64)
 
-		err = r.shiftIndicies(ctx, collection, -1, int(removed_index), 100)
+		err = r.shiftIndicies(ctx, collectionRef, -1, int(removed_index), 100)
 		if err != nil {
 			return err
 		}
 	}
 
-	_, err := ref.Delete(ctx)
+	_, err = doc.Ref.Delete(ctx)
 	if err != nil {
 		log.Printf("unable to delete item: %v", err)
 		return err
@@ -126,17 +182,33 @@ func (r *FirebaseRepo) ToggleActiveByID(ctx context.Context, collection string, 
 	return err
 }
 
-func (r *FirebaseRepo) UpdateItemByID(ctx context.Context, collection string, item_id int, item_values map[string]interface{}) error {
-	ref := r.Client.Collection(collection).Doc(strconv.Itoa(item_id))
-	err := r.Client.RunTransaction(ctx, func(ctx context.Context, tx *firestore.Transaction) error {
+func (r *FirebaseRepo) UpdateItemByID(ctx context.Context, collection interface{}, id int, itemValues map[string]interface{}) error {
+	var collectionRef *firestore.CollectionRef
+	if c, ok := collection.(*firestore.CollectionRef); !ok {
+		return errors.New("must pass interface of type firestoreCollectionRef into FetchAll")
+	} else {
+		collectionRef = c
+	}
+
+	docs, err := collectionRef.Where("ItemID", "==", id).Documents(ctx).GetAll()
+	if err != nil {
+		return err
+	} else if len(docs) == 0 {
+		return errors.New("failed to delete document: not found")
+	} else if len(docs) > 1 {
+		return errors.New("failed to delete document: multiple documents found with matching IDs")
+	}
+
+	doc := docs[0]
+	err = r.Client.RunTransaction(ctx, func(ctx context.Context, tx *firestore.Transaction) error {
 
 		var updates []firestore.Update
 
-		for path, new_value := range item_values {
-			updates = append(updates, firestore.Update{Path: path, Value: new_value})
+		for path, newValue := range itemValues {
+			updates = append(updates, firestore.Update{Path: path, Value: newValue})
 		}
 
-		return tx.Update(ref, updates)
+		return tx.Update(doc.Ref, updates)
 	})
 
 	if err != nil {
@@ -214,7 +286,10 @@ func (r *FirebaseRepo) remapIndiciesFromRemoved(ctx context.Context, removed_ind
 		return nil
 	}
 
-	num_items, err := r.countNumDocs(ctx, "grocery")
+	// temp
+	groceryCollection := r.GetCollectionRef("grocery", nil)
+
+	num_items, err := r.countNumDocs(ctx, groceryCollection)
 	if err != nil {
 		return err
 	}
@@ -254,8 +329,8 @@ func (r *FirebaseRepo) remapIndiciesFromRemoved(ctx context.Context, removed_ind
 	return err
 }
 
-func (r *FirebaseRepo) countNumDocs(ctx context.Context, collection string) (int, error) {
-	query := r.Client.Collection(collection).NewAggregationQuery().WithCount("all")
+func (r *FirebaseRepo) countNumDocs(ctx context.Context, collection *firestore.CollectionRef) (int, error) {
+	query := collection.NewAggregationQuery().WithCount("all")
 	results, err := query.Get(ctx)
 	if err != nil {
 		return 0, err
@@ -286,8 +361,15 @@ func computeNewIndexMap(removed_indicies map[int]bool, num_items int) map[int]in
 	return new_map
 }
 
-func (r *FirebaseRepo) RearrageItems(ctx context.Context, collection string, old_index int64, new_index int64) error {
-	max_index, err := r.countNumDocs(ctx, collection)
+func (r *FirebaseRepo) RearrageItems(ctx context.Context, collection interface{}, old_index int64, new_index int64) error {
+	var collectionRef *firestore.CollectionRef
+	if c, ok := collection.(*firestore.CollectionRef); !ok {
+		return errors.New("must pass interface of type firestoreCollectionRef into FetchAll")
+	} else {
+		collectionRef = c
+	}
+
+	max_index, err := r.countNumDocs(ctx, collectionRef)
 	if err != nil {
 		return err
 	}
@@ -296,15 +378,15 @@ func (r *FirebaseRepo) RearrageItems(ctx context.Context, collection string, old
 		return errors.New("indicies exceed max index")
 	}
 
-	doc, err := r.Client.Collection(collection).Where("Index", "==", old_index).Documents(ctx).Next()
+	doc, err := collectionRef.Where("Index", "==", old_index).Documents(ctx).Next()
 	if err != nil {
 		return fmt.Errorf("could not find document with index %d", old_index)
 	}
 
 	if new_index < old_index { // moved up
-		err = r.shiftIndicies(ctx, collection, 1, int(new_index), int(old_index)-1)
+		err = r.shiftIndicies(ctx, collectionRef, 1, int(new_index), int(old_index)-1)
 	} else { // moved down
-		err = r.shiftIndicies(ctx, collection, -1, int(old_index)+1, int(new_index))
+		err = r.shiftIndicies(ctx, collectionRef, -1, int(old_index)+1, int(new_index))
 	}
 	if err != nil {
 		return err
@@ -318,9 +400,9 @@ func (r *FirebaseRepo) RearrageItems(ctx context.Context, collection string, old
 	return err
 }
 
-func (r *FirebaseRepo) shiftIndicies(ctx context.Context, collection string, amount int64, start_index int, end_index int) error {
+func (r *FirebaseRepo) shiftIndicies(ctx context.Context, collection *firestore.CollectionRef, amount int64, start_index int, end_index int) error {
 	err := r.Client.RunTransaction(ctx, func(ctx context.Context, tx *firestore.Transaction) error {
-		docs := r.Client.Collection(collection).Where("Index", ">=", start_index).Where("Index", "<=", end_index)
+		docs := collection.Where("Index", ">=", start_index).Where("Index", "<=", end_index)
 		iter := docs.Documents(ctx)
 
 		for {
@@ -350,13 +432,24 @@ func (r *FirebaseRepo) shiftIndicies(ctx context.Context, collection string, amo
 	return err
 }
 
-func getItemSchemaByCollection(collection string) interface{} {
+func getItemSchemaFromCollection(collectionPath string) interface{} {
+	splits := strings.Split(collectionPath, "/")
+	collection := strings.ToUpper(splits[len(splits)-1])
+
 	switch collection {
-	case "fridge":
+	case "FRIDGE":
 		return &model.FridgeItem{}
-	case "grocery":
+	case "GROCERY":
 		return &model.GroceryItem{}
 	default:
 		return nil
 	}
+}
+
+func (r *FirebaseRepo) CreateUser(ctx context.Context, user model.User) error {
+	_, err := r.Client.Collection("USER").Doc(user.Username).Set(ctx, user)
+	if err != nil {
+		log.Printf("Failed to create user: %v", err)
+	}
+	return err
 }

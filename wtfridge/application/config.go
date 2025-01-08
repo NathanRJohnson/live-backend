@@ -3,6 +3,7 @@ package application
 import (
 	"encoding/json"
 	"fmt"
+	"log"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -12,6 +13,8 @@ type Config struct {
 	ServerPort  uint16
 	SecretsPath string
 	Secrets     FirebaseSecrets
+	SessionKey  string
+	RefreshKey  string
 }
 
 func LoadConfig() Config {
@@ -42,6 +45,29 @@ func LoadConfig() Config {
 		fmt.Println("Cannot load secrets", err)
 	}
 	cfg.Secrets = *secrets
+
+	// jwt signing secrets
+	signingData, err := os.ReadFile("/run/secrets/session")
+	if err != nil {
+		// if it's a non docker-compose deploy
+		signingData, err = os.ReadFile("../secrets/session-secrets.json")
+		if err != nil {
+			log.Fatalf("error loading signing secrets: %v", err)
+		}
+	}
+
+	var signingSecrets struct {
+		Session string `json:"session-key"`
+		Refresh string `json:"refresh-key"`
+	}
+
+	err = json.Unmarshal(signingData, &signingSecrets)
+	if err != nil {
+		log.Fatalf("error unmarshalling signing secrets: %v", err)
+	}
+
+	cfg.SessionKey = signingSecrets.Session
+	cfg.RefreshKey = signingSecrets.Refresh
 
 	return cfg
 }

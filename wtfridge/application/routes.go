@@ -12,14 +12,15 @@ func (a *App) loadRoutes() {
 
 	fridgeRouter := http.NewServeMux()
 	a.loadFridgeRoutes(fridgeRouter)
-
 	router.Handle("/fridge/", http.StripPrefix("/fridge", fridgeRouter))
 
 	groceryRouter := http.NewServeMux()
 	a.loadGroceryRoutes(groceryRouter)
-
 	router.Handle("/grocery/", http.StripPrefix("/grocery", groceryRouter))
 
+	userRouter := http.NewServeMux()
+	a.loadUserRoutes(userRouter)
+	router.Handle("/user/", http.StripPrefix("/user", userRouter))
 	a.router = router
 }
 
@@ -42,11 +43,24 @@ func (a *App) loadGroceryRoutes(router *http.ServeMux) {
 			Client: a.fdb,
 		},
 	}
-	router.HandleFunc("POST /", groceryHandler.Create)
+	// router.HandleFunc("POST /", groceryHandler.Create)
 	router.HandleFunc("POST /to_fridge", groceryHandler.MoveToFridge)
-	router.HandleFunc("GET /", groceryHandler.List)
+	// router.HandleFunc("GET /", groceryHandler.List)
 	router.HandleFunc("DELETE /{id}", groceryHandler.DeleteByID)
 	router.HandleFunc("PATCH /{id}", groceryHandler.SetActiveByID)
 	router.HandleFunc("PATCH /", groceryHandler.RearrageItems)
 	router.HandleFunc("PUT /", groceryHandler.UpdateByID)
+}
+
+func (a *App) loadUserRoutes(router *http.ServeMux) {
+	userHandler := &handler.User{
+		Repo: &item.FirebaseRepo{
+			Client: a.fdb,
+		},
+	}
+	userHandler.SetKeys(a.config.SessionKey, a.config.RefreshKey)
+	router.HandleFunc("POST /", userHandler.Create)
+	router.HandleFunc("GET /", userHandler.Read)
+	router.HandleFunc("GET /refresh", userHandler.Refresh)
+	// router.Handle("GET /{id}", userHandler.Read)
 }

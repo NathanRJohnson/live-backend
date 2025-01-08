@@ -19,6 +19,7 @@ services:
       target: builder
     secrets:
       - serviceKey
+      - session
 
   finance-api:
     container_name: finance-api
@@ -34,6 +35,8 @@ secrets:
     file: ./secrets/firebase-serviceKey.json
   googleSheets:
     file: ./secrets/gsheets-serviceKey.json
+  session:
+    file: ./secrets/session-secrets.json
 
   
   # goals-api:
