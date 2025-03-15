@@ -6,6 +6,7 @@ import (
 	"log"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/NathanRJohnson/live-backend/wtfridge/repository/item"
@@ -54,24 +55,14 @@ func (i *Item) Create(w http.ResponseWriter, r *http.Request) {
 	}
 
 	authHeader := r.Header.Get("Authorization")
-	var fridgeCollection interface{}
-	if authHeader == "" {
-		fridgeCollection = i.Repo.GetCollectionRef("fridge", nil)
-	} else {
-		claims, err := getUserClaimsFromHeader(authHeader)
-		if err != nil {
-			log.Println("could not get claims for user:", err)
-			http.Error(w, err.Error(), http.StatusUnauthorized)
-			return
-		}
-
-		userCollection := i.Repo.GetCollectionRef("USER", nil)
-		userDoc := i.Repo.GetDocRef(userCollection, claims.Username)
-		fridgeCollection = i.Repo.GetCollectionRef("FRIDGE", userDoc)
+	fridgeCollection, err := i.getCollectionFromHeader(authHeader, "FRIDGE")
+	if err != nil {
+		log.Println("could not get claims for user:", err)
+		http.Error(w, err.Error(), http.StatusUnauthorized)
+		return
 	}
 
-	// TODO: can I make the collection a const?
-	err := i.Repo.Insert(r.Context(), fridgeCollection, item)
+	err = i.Repo.Insert(r.Context(), fridgeCollection, item)
 	if err != nil {
 		fmt.Println("failed to insert:", err)
 		w.WriteHeader(http.StatusInternalServerError)
@@ -92,23 +83,11 @@ func (i *Item) List(w http.ResponseWriter, r *http.Request) {
 	fmt.Println("List all items - fridge")
 
 	authHeader := r.Header.Get("Authorization")
-	var fridgeCollection interface{}
-
-	if authHeader == "" { // this exists solely to support legacy systems. TODO: remove once legacy system has been migrated
-		fridgeCollection = i.Repo.GetCollectionRef("fridge", nil)
-
-	} else {
-		// v2 endpoint
-		claims, err := getUserClaimsFromHeader(authHeader)
-		if err != nil {
-			log.Println("could not get claims for user:", err)
-			http.Error(w, err.Error(), http.StatusUnauthorized)
-			return
-		}
-
-		userCollection := i.Repo.GetCollectionRef("USER", nil)
-		userDoc := i.Repo.GetDocRef(userCollection, claims.Username)
-		fridgeCollection = i.Repo.GetCollectionRef("FRIDGE", userDoc)
+	fridgeCollection, err := i.getCollectionFromHeader(authHeader, "FRIDGE")
+	if err != nil {
+		log.Println("could not get claims for user:", err)
+		http.Error(w, err.Error(), http.StatusUnauthorized)
+		return
 	}
 
 	items, err := i.Repo.FetchAll(r.Context(), fridgeCollection)
@@ -136,23 +115,11 @@ func (i *Item) UpdateByID(w http.ResponseWriter, r *http.Request) {
 	fmt.Println("Update an item by ID")
 
 	authHeader := r.Header.Get("Authorization")
-	var fridgeCollection interface{}
-
-	if authHeader == "" { // this exists solely to support legacy systems. TODO: remove once legacy system has been migrated
-		fridgeCollection = i.Repo.GetCollectionRef("fridge", nil)
-
-	} else {
-		// v2 endpoint
-		claims, err := getUserClaimsFromHeader(authHeader)
-		if err != nil {
-			log.Println("could not get claims for user:", err)
-			http.Error(w, err.Error(), http.StatusUnauthorized)
-			return
-		}
-
-		userCollection := i.Repo.GetCollectionRef("USER", nil)
-		userDoc := i.Repo.GetDocRef(userCollection, claims.Username)
-		fridgeCollection = i.Repo.GetCollectionRef("FRIDGE", userDoc)
+	fridgeCollection, err := i.getCollectionFromHeader(authHeader, "FRIDGE")
+	if err != nil {
+		log.Println("could not get claims for user:", err)
+		http.Error(w, err.Error(), http.StatusUnauthorized)
+		return
 	}
 
 	var body struct {
@@ -202,7 +169,7 @@ func (i *Item) UpdateByID(w http.ResponseWriter, r *http.Request) {
 		new_values["DateAdded"] = body.NewDateAdded
 	}
 
-	err := i.Repo.UpdateItemByID(r.Context(), fridgeCollection, body.ItemID, new_values)
+	err = i.Repo.UpdateItemByID(r.Context(), fridgeCollection, body.ItemID, new_values)
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		return
@@ -216,23 +183,11 @@ func (i *Item) DeleteByID(w http.ResponseWriter, r *http.Request) {
 	fmt.Println("Delete an item by ID")
 
 	authHeader := r.Header.Get("Authorization")
-	var fridgeCollection interface{}
-
-	if authHeader == "" { // this exists solely to support legacy systems. TODO: remove once legacy system has been migrated
-		fridgeCollection = i.Repo.GetCollectionRef("fridge", nil)
-
-	} else {
-		// v2 endpoint
-		claims, err := getUserClaimsFromHeader(authHeader)
-		if err != nil {
-			log.Println("could not get claims for user:", err)
-			http.Error(w, err.Error(), http.StatusUnauthorized)
-			return
-		}
-
-		userCollection := i.Repo.GetCollectionRef("USER", nil)
-		userDoc := i.Repo.GetDocRef(userCollection, claims.Username)
-		fridgeCollection = i.Repo.GetCollectionRef("FRIDGE", userDoc)
+	fridgeCollection, err := i.getCollectionFromHeader(authHeader, "FRIDGE")
+	if err != nil {
+		log.Println("could not get claims for user:", err)
+		http.Error(w, err.Error(), http.StatusUnauthorized)
+		return
 	}
 
 	// Get the doc id
@@ -251,4 +206,25 @@ func (i *Item) DeleteByID(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.WriteHeader(http.StatusOK)
+}
+
+func (i *Item) getCollectionFromHeader(authHeader string, collection string) (interface{}, error) {
+	var grocery interface{}
+
+	if authHeader == "" { // this exists solely to support legacy systems. TODO: remove once legacy system has been migrated
+		grocery = i.Repo.GetCollectionRef(strings.ToLower(collection), nil)
+
+	} else {
+		// v2 endpoint
+		claims, err := getUserClaimsFromHeader(authHeader)
+		if err != nil {
+			return nil, err
+		}
+
+		userCollection := i.Repo.GetCollectionRef("USER", nil)
+		userDoc := i.Repo.GetDocRef(userCollection, claims.Username)
+		grocery = i.Repo.GetCollectionRef(strings.ToUpper(collection), userDoc)
+	}
+
+	return grocery, nil
 }

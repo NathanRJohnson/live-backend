@@ -146,8 +146,15 @@ func (r *FirebaseRepo) DeleteByID(ctx context.Context, collection interface{}, i
 }
 
 // TODO: update this to take any path and any value
-func (r *FirebaseRepo) ToggleActiveByID(ctx context.Context, collection string, id int) error {
-	ref := r.Client.Collection(collection).Doc(strconv.Itoa(id))
+func (r *FirebaseRepo) ToggleActiveByID(ctx context.Context, collection interface{}, id int) error {
+	var collectionRef *firestore.CollectionRef
+	if c, ok := collection.(*firestore.CollectionRef); !ok {
+		return errors.New("must pass interface of type firestoreCollectionRef into DeleteByID")
+	} else {
+		collectionRef = c
+	}
+
+	ref := collectionRef.Doc(strconv.Itoa(id))
 	err := r.Client.RunTransaction(ctx, func(ctx context.Context, tx *firestore.Transaction) error {
 		doc, err := tx.Get(ref)
 		if err != nil {
@@ -218,9 +225,23 @@ func (r *FirebaseRepo) UpdateItemByID(ctx context.Context, collection interface{
 	return err
 }
 
-func (r *FirebaseRepo) MoveToFridge(ctx context.Context) error {
-	active_doc_refs := r.Client.Collection("grocery").Where("IsActive", "==", true).Documents(ctx)
-	fridge_ref := r.Client.Collection("fridge")
+func (r *FirebaseRepo) MoveToFridge(ctx context.Context, source interface{}, dest interface{}) error {
+
+	var sourceRef *firestore.CollectionRef
+	if c, ok := source.(*firestore.CollectionRef); !ok {
+		return errors.New("must pass interface of type firestoreCollectionRef into FetchAll")
+	} else {
+		sourceRef = c
+	}
+
+	var destRef *firestore.CollectionRef
+	if c, ok := dest.(*firestore.CollectionRef); !ok {
+		return errors.New("must pass interface of type firestoreCollectionRef into FetchAll")
+	} else {
+		destRef = c
+	}
+
+	active_doc_refs := sourceRef.Where("IsActive", "==", true).Documents(ctx)
 
 	// using a map to act as a set
 	removed_indicies := make(map[int]bool)
@@ -257,26 +278,23 @@ func (r *FirebaseRepo) MoveToFridge(ctx context.Context) error {
 				DateAdded: &now,
 			}
 
-			fridge_item_ref := firestore.DocumentRef{
-				Parent: fridge_ref,
-				Path:   filepath.Join(fridge_ref.Path, strconv.Itoa(grocery_item.ItemID)),
+			destItemRef := firestore.DocumentRef{
+				Parent: destRef,
+				Path:   filepath.Join(destRef.Path, strconv.Itoa(grocery_item.ItemID)),
 				ID:     strconv.Itoa(grocery_item.ItemID),
 			}
 
-			err = tx.Create(&fridge_item_ref, fridge_item)
+			err = tx.Create(&destItemRef, fridge_item)
 			if err != nil {
 				log.Printf("unable to create fridge item %s: %v", fridge_item.Name, err)
 				return err
 			}
 		}
-
 	})
 
 	if err != nil {
 		return err
 	}
-
-	log.Println(removed_indicies)
 
 	return err
 }

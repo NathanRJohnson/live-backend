@@ -152,23 +152,17 @@ func (u *User) Refresh(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var body struct {
-		RefreshToken string `json:"refresh_token"`
-	}
+	refreshToken := r.Header.Get("Refresh")
 
-	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		w.WriteHeader(http.StatusBadRequest)
-		log.Println("error unmarshalling request:", err)
+	newSessionToken, err := validateRefreshToken(refreshToken)
+	if err != nil {
+		log.Println("failed to issue new session token:", err)
+		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
 
-	newSessionToken, err := validateRefreshToken(body.RefreshToken)
-	if err != nil {
-		log.Println("failed to issue new session token:", err)
-	}
-
 	jsonToken := map[string]interface{}{
-		"session_token": newSessionToken,
+		"session": newSessionToken,
 	}
 
 	res, err := json.Marshal(jsonToken)
