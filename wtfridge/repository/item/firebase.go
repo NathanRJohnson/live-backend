@@ -154,9 +154,17 @@ func (r *FirebaseRepo) ToggleActiveByID(ctx context.Context, collection interfac
 		collectionRef = c
 	}
 
-	ref := collectionRef.Doc(strconv.Itoa(id))
-	err := r.Client.RunTransaction(ctx, func(ctx context.Context, tx *firestore.Transaction) error {
-		doc, err := tx.Get(ref)
+	docs, err := collectionRef.Where("ItemID", "==", id).Documents(ctx).GetAll()
+	if err != nil {
+		return err
+	} else if len(docs) == 0 {
+		return errors.New("failed to update document: not found")
+	} else if len(docs) > 1 {
+		return errors.New("failed to update document: multiple documents found with matching IDs")
+	}
+
+	doc := docs[0]
+	err = r.Client.RunTransaction(ctx, func(ctx context.Context, tx *firestore.Transaction) error {
 		if err != nil {
 			log.Printf("unable to get %d from %s", id, collection)
 			return err
@@ -179,7 +187,7 @@ func (r *FirebaseRepo) ToggleActiveByID(ctx context.Context, collection interfac
 			{Path: "IsActive", Value: !is_active},
 		}
 
-		return tx.Update(ref, updates)
+		return tx.Update(doc.Ref, updates)
 	})
 
 	if err != nil {
@@ -201,9 +209,9 @@ func (r *FirebaseRepo) UpdateItemByID(ctx context.Context, collection interface{
 	if err != nil {
 		return err
 	} else if len(docs) == 0 {
-		return errors.New("failed to delete document: not found")
+		return errors.New("failed to update document: not found")
 	} else if len(docs) > 1 {
-		return errors.New("failed to delete document: multiple documents found with matching IDs")
+		return errors.New("failed to update document: multiple documents found with matching IDs")
 	}
 
 	doc := docs[0]
