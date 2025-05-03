@@ -272,7 +272,6 @@ func (r *FirebaseRepo) MoveToFridge(ctx context.Context, source interface{}, des
 			}
 
 			removed_indicies[grocery_item.Index] = true
-
 			err = tx.Delete(doc.Ref)
 			if err != nil {
 				log.Printf("unable to delete document %s: %v", doc.Ref.ID, err)
@@ -284,12 +283,14 @@ func (r *FirebaseRepo) MoveToFridge(ctx context.Context, source interface{}, des
 				ItemID:    grocery_item.ItemID,
 				Name:      grocery_item.Name,
 				DateAdded: &now,
+				Quantity:  grocery_item.Quantity,
+				Notes:     grocery_item.Notes,
 			}
 
 			destItemRef := firestore.DocumentRef{
 				Parent: destRef,
 				Path:   filepath.Join(destRef.Path, strconv.Itoa(grocery_item.ItemID)),
-				ID:     strconv.Itoa(grocery_item.ItemID),
+				ID:     doc.Ref.ID,
 			}
 
 			err = tx.Create(&destItemRef, fridge_item)

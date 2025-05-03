@@ -194,7 +194,7 @@ func getSignInTokens(username string) (string, string, error) {
 
 	refreshToken := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
 		"username": username,
-		"exp":      time.Now().Add(time.Hour).Unix(),
+		"exp":      time.Now().Add(time.Hour * 3).Unix(),
 	})
 	refreshTokenString, err := refreshToken.SignedString(refreshKey)
 	if err != nil {
