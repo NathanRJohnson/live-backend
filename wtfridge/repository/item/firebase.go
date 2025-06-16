@@ -22,13 +22,35 @@ type FirebaseRepo struct {
 func (r *FirebaseRepo) Insert(ctx context.Context, collection string, item model.Item) error {
 	_, err := r.Client.Collection(collection).Doc(strconv.Itoa(item.GetID())).Set(ctx, item)
 	if err != nil {
-		log.Fatalf("Failed adding item: %v", err)
+		return false, err
+	}
+	return snapshot.Exists(), nil
+}
+
+func (r *FirebaseRepo) Insert(ctx context.Context, collection interface{}, data map[string]interface{}) error {
+	var collectionRef *firestore.CollectionRef
+	if c, ok := collection.(*firestore.CollectionRef); !ok {
+		return errors.New("must pass interface of type firestore.CollectionRef into Insert")
+	} else {
+		collectionRef = c
+	}
+
+	_, _, err := collectionRef.Add(ctx, data)
+	if err != nil {
+		log.Printf("Failed adding item: %v", err)
 	}
 
 	return nil
 }
 
-func (r *FirebaseRepo) FetchAll(ctx context.Context, collection string) ([]interface{}, error) {
+func (r *FirebaseRepo) FetchAll(ctx context.Context, collection interface{}) ([]interface{}, error) {
+	var collectionRef *firestore.CollectionRef
+	if c, ok := collection.(*firestore.CollectionRef); !ok {
+		return nil, errors.New("must pass interface of type firestore.CollectionRef into FetchAll")
+	} else {
+		collectionRef = c
+	}
+
 	var items []interface{}
 	iter := r.Client.Collection(collection).Documents(ctx)
 
@@ -57,8 +79,24 @@ func (r *FirebaseRepo) FetchAll(ctx context.Context, collection string) ([]inter
 	return items, nil
 }
 
-func (r *FirebaseRepo) DeleteByID(ctx context.Context, collection string, id int) error {
-	ref := r.Client.Collection(collection).Doc(strconv.Itoa(id))
+func (r *FirebaseRepo) DeleteByID(ctx context.Context, collection interface{}, id int) error {
+	var collectionRef *firestore.CollectionRef
+	if c, ok := collection.(*firestore.CollectionRef); !ok {
+		return errors.New("must pass interface of type firestore.CollectionRef into DeleteByID")
+	} else {
+		collectionRef = c
+	}
+
+	docs, err := collectionRef.Where("ItemID", "==", id).Documents(ctx).GetAll()
+	if err != nil {
+		return err
+	} else if len(docs) == 0 {
+		return errors.New("failed to delete document: not found")
+	} else if len(docs) > 1 {
+		return errors.New("failed to delete document: multiple documents found with matching IDs")
+	}
+
+	doc := docs[0]
 
 	// shift indicies up to account for the deleted item
 	if collection == "grocery" {
@@ -90,15 +128,20 @@ func (r *FirebaseRepo) DeleteByID(ctx context.Context, collection string, id int
 }
 
 // TODO: update this to take any path and any value
-func (r *FirebaseRepo) ToggleActiveByID(ctx context.Context, collection string, id int) error {
-	ref := r.Client.Collection(collection).Doc(strconv.Itoa(id))
-	err := r.Client.RunTransaction(ctx, func(ctx context.Context, tx *firestore.Transaction) error {
-		doc, err := tx.Get(ref)
-		if err != nil {
-			log.Printf("unable to get %d from %s", id, collection)
-			return err
-		}
+func (r *FirebaseRepo) ToggleActiveByID(ctx context.Context, collection interface{}, id int) error {
+	var collectionRef *firestore.CollectionRef
+	if c, ok := collection.(*firestore.CollectionRef); !ok {
+		return errors.New("must pass interface of type firestore.CollectionRef into ToggleActiveByID")
+	} else {
+		collectionRef = c
+	}
 
+	doc, err := collectionRef.Where("ItemID", "==", id).Documents(ctx).Next()
+	if err != nil {
+		return err
+	}
+
+	err = r.Client.RunTransaction(ctx, func(ctx context.Context, tx *firestore.Transaction) error {
 		data, err := doc.DataAt("IsActive")
 		if err != nil {
 			log.Printf("unable to read is_active field: %v", err)
@@ -116,7 +159,7 @@ func (r *FirebaseRepo) ToggleActiveByID(ctx context.Context, collection string, 
 			{Path: "IsActive", Value: !is_active},
 		}
 
-		return tx.Update(ref, updates)
+		return tx.Update(doc.Ref, updates)
 	})
 
 	if err != nil {
@@ -126,9 +169,25 @@ func (r *FirebaseRepo) ToggleActiveByID(ctx context.Context, collection string, 
 	return err
 }
 
-func (r *FirebaseRepo) UpdateItemByID(ctx context.Context, collection string, item_id int, item_values map[string]interface{}) error {
-	ref := r.Client.Collection(collection).Doc(strconv.Itoa(item_id))
-	err := r.Client.RunTransaction(ctx, func(ctx context.Context, tx *firestore.Transaction) error {
+func (r *FirebaseRepo) UpdateItemByID(ctx context.Context, collection interface{}, id int, itemValues map[string]interface{}) error {
+	var collectionRef *firestore.CollectionRef
+	if c, ok := collection.(*firestore.CollectionRef); !ok {
+		return errors.New("must pass interface of type firestore.CollectionRef into UpdateItemByID")
+	} else {
+		collectionRef = c
+	}
+
+	docs, err := collectionRef.Where("ItemID", "==", id).Documents(ctx).GetAll()
+	if err != nil {
+		return err
+	} else if len(docs) == 0 {
+		return errors.New("failed to delete document: not found")
+	} else if len(docs) > 1 {
+		return errors.New("failed to delete document: multiple documents found with matching IDs")
+	}
+
+	doc := docs[0]
+	err = r.Client.RunTransaction(ctx, func(ctx context.Context, tx *firestore.Transaction) error {
 
 		var updates []firestore.Update
 
@@ -146,9 +205,24 @@ func (r *FirebaseRepo) UpdateItemByID(ctx context.Context, collection string, it
 	return err
 }
 
-func (r *FirebaseRepo) MoveToFridge(ctx context.Context) error {
-	active_doc_refs := r.Client.Collection("grocery").Where("IsActive", "==", true).Documents(ctx)
-	fridge_ref := r.Client.Collection("fridge")
+func (r *FirebaseRepo) MoveToFridge(ctx context.Context, userRef interface{}) error {
+	var active_doc_refs *firestore.DocumentIterator
+	var fridge_ref *firestore.CollectionRef
+	var user *firestore.DocumentRef
+
+	if u, ok := userRef.(*firestore.DocumentRef); !ok {
+		return errors.New("must pass inteface of type *firestore.DocumentRef")
+	} else {
+		user = u
+	}
+
+	if user == nil {
+		active_doc_refs = r.Client.Collection("grocery").Where("IsActive", "==", true).Documents(ctx)
+		fridge_ref = r.Client.Collection("fridge")
+	} else {
+		active_doc_refs = user.Collection("GROCERY").Where("IsActive", "==", true).Documents(ctx)
+		fridge_ref = user.Collection("FRIDGE")
+	}
 
 	// using a map to act as a set
 	removed_indicies := make(map[int]bool)
@@ -157,7 +231,7 @@ func (r *FirebaseRepo) MoveToFridge(ctx context.Context) error {
 		for {
 			doc, err := active_doc_refs.Next()
 			if err == iterator.Done {
-				return r.remapIndiciesFromRemoved(ctx, removed_indicies)
+				return r.remapIndiciesFromRemoved(ctx, user, removed_indicies)
 			} else if err != nil {
 				log.Printf("could not iterate through docs: %v", err)
 				return err
@@ -182,13 +256,15 @@ func (r *FirebaseRepo) MoveToFridge(ctx context.Context) error {
 			fridge_item := model.FridgeItem{
 				ItemID:    grocery_item.ItemID,
 				Name:      grocery_item.Name,
+				Notes:     grocery_item.Notes,
+				Quantity:  grocery_item.Quantity,
 				DateAdded: &now,
 			}
 
 			fridge_item_ref := firestore.DocumentRef{
 				Parent: fridge_ref,
-				Path:   filepath.Join(fridge_ref.Path, strconv.Itoa(grocery_item.ItemID)),
-				ID:     strconv.Itoa(grocery_item.ItemID),
+				Path:   filepath.Join(fridge_ref.Path, doc.Ref.ID),
+				ID:     doc.Ref.ID,
 			}
 
 			err = tx.Create(&fridge_item_ref, fridge_item)
@@ -209,19 +285,25 @@ func (r *FirebaseRepo) MoveToFridge(ctx context.Context) error {
 	return err
 }
 
-func (r *FirebaseRepo) remapIndiciesFromRemoved(ctx context.Context, removed_indicies map[int]bool) error {
+func (r *FirebaseRepo) remapIndiciesFromRemoved(ctx context.Context, userRef *firestore.DocumentRef, removed_indicies map[int]bool) error {
 	if len(removed_indicies) == 0 {
 		return nil
 	}
 
-	num_items, err := r.countNumDocs(ctx, "grocery")
+	var groceryCollection *firestore.CollectionRef
+	if userRef == nil {
+		groceryCollection = r.Client.Collection("grocery")
+	} else {
+		groceryCollection = userRef.Collection("GROCERY")
+	}
+
+	num_items, err := r.countNumDocs(ctx, groceryCollection)
 	if err != nil {
 		return err
 	}
 	new_index_map := computeNewIndexMap(removed_indicies, num_items)
 
-	iter := r.Client.Collection("grocery").Documents(ctx)
-
+	iter := groceryCollection.Documents(ctx)
 	for {
 		doc, err := iter.Next()
 		if err == iterator.Done {
@@ -286,8 +368,15 @@ func computeNewIndexMap(removed_indicies map[int]bool, num_items int) map[int]in
 	return new_map
 }
 
-func (r *FirebaseRepo) RearrageItems(ctx context.Context, collection string, old_index int64, new_index int64) error {
-	max_index, err := r.countNumDocs(ctx, collection)
+func (r *FirebaseRepo) RearrageItems(ctx context.Context, collection interface{}, old_index int64, new_index int64) error {
+	var collectionRef *firestore.CollectionRef
+	if c, ok := collection.(*firestore.CollectionRef); !ok {
+		return errors.New("must pass interface of type firestore.CollectionRef into RearrangeItems")
+	} else {
+		collectionRef = c
+	}
+
+	max_index, err := r.countNumDocs(ctx, collectionRef)
 	if err != nil {
 		return err
 	}

@@ -6,17 +6,21 @@ import (
 	"log"
 	"net/http"
 	"strconv"
-
-	"github.com/NathanRJohnson/live-backend/wtfridge/model"
-	"github.com/NathanRJohnson/live-backend/wtfridge/repository/item"
 )
 
-type Grocery struct {
-	Repo *item.FirebaseRepo
-}
+// type Grocery struct {
+// 	Repo *item.FirebaseRepo
+// }
 
-func (g *Grocery) Create(w http.ResponseWriter, r *http.Request) {
+func (db *DB) Create(w http.ResponseWriter, r *http.Request) {
 	fmt.Println("Create a grocery item")
+
+	authHeader := r.Header.Get("Authorization")
+	groceryCollection, err := db.getCollectionFromHeader(authHeader, GROCERY)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusUnauthorized)
+		return
+	}
 
 	var body struct {
 		ItemID   int    `json:"item_id"`
@@ -39,16 +43,16 @@ func (g *Grocery) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	item := model.GroceryItem{
-		ItemID:   body.ItemID,
-		Name:     body.Name,
-		IsActive: body.IsActive,
-		Index:    body.Index,
-		Quantity: body.Quantity,
-		Notes:    body.Notes,
+	item := map[string]interface{}{
+		"ItemID":   body.ItemID,
+		"Name":     body.Name,
+		"IsActive": body.IsActive,
+		"Index":    body.Index,
+		"Quantity": body.Quantity,
+		"Notes":    body.Notes,
 	}
 
-	err := g.Repo.Insert(r.Context(), "grocery", item)
+	err = db.Repo.Insert(r.Context(), groceryCollection, item)
 	if err != nil {
 		fmt.Println("failed to insert:", err)
 		w.WriteHeader(http.StatusInternalServerError)
@@ -66,9 +70,17 @@ func (g *Grocery) Create(w http.ResponseWriter, r *http.Request) {
 	w.Write(res)
 }
 
-func (g *Grocery) List(w http.ResponseWriter, r *http.Request) {
+func (db *DB) List(w http.ResponseWriter, r *http.Request) {
 	fmt.Println("List all grocery items")
-	items, err := g.Repo.FetchAll(r.Context(), "grocery")
+
+	authHeader := r.Header.Get("Authorization")
+	groceryCollection, err := db.getCollectionFromHeader(authHeader, GROCERY)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusUnauthorized)
+		return
+	}
+
+	items, err := db.Repo.FetchAll(r.Context(), groceryCollection)
 	if err != nil {
 		fmt.Println("failed to fetch all:", err)
 		w.WriteHeader(http.StatusInternalServerError)
@@ -83,8 +95,15 @@ func (g *Grocery) List(w http.ResponseWriter, r *http.Request) {
 	w.Write(res)
 }
 
-func (g *Grocery) DeleteByID(w http.ResponseWriter, r *http.Request) {
+func (db *DB) DeleteByID(w http.ResponseWriter, r *http.Request) {
 	fmt.Println("Delete an item by ID")
+
+	authHeader := r.Header.Get("Authorization")
+	groceryCollection, err := db.getCollectionFromHeader(authHeader, GROCERY)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusUnauthorized)
+		return
+	}
 
 	id, err := strconv.Atoi(r.PathValue("id"))
 	if err != nil {
@@ -93,7 +112,7 @@ func (g *Grocery) DeleteByID(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	err = g.Repo.DeleteByID(r.Context(), "grocery", id)
+	err = db.Repo.DeleteByID(r.Context(), groceryCollection, id)
 	if err != nil {
 		fmt.Println("failed to delete:", err)
 		w.WriteHeader(http.StatusInternalServerError)
@@ -103,8 +122,15 @@ func (g *Grocery) DeleteByID(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 }
 
-func (g *Grocery) SetActiveByID(w http.ResponseWriter, r *http.Request) {
+func (db *DB) SetActiveByID(w http.ResponseWriter, r *http.Request) {
 	log.Println("Change active state")
+
+	authHeader := r.Header.Get("Authorization")
+	groceryCollection, err := db.getCollectionFromHeader(authHeader, GROCERY)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusUnauthorized)
+		return
+	}
 
 	id, err := strconv.Atoi(r.PathValue("id"))
 	if err != nil {
@@ -113,15 +139,23 @@ func (g *Grocery) SetActiveByID(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	err = g.Repo.ToggleActiveByID(r.Context(), "grocery", id)
+	err = db.Repo.ToggleActiveByID(r.Context(), groceryCollection, id)
 	if err != nil {
 		log.Println("failed to toggle active state")
+		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
 }
 
-func (g *Grocery) UpdateByID(w http.ResponseWriter, r *http.Request) {
+func (db *DB) UpdateByID(w http.ResponseWriter, r *http.Request) {
 	log.Println("Update by ID")
+
+	authHeader := r.Header.Get("Authorization")
+	groceryCollection, err := db.getCollectionFromHeader(authHeader, GROCERY)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusUnauthorized)
+		return
+	}
 
 	var body struct {
 		ItemID      int    `json:"item_id"`
@@ -147,8 +181,9 @@ func (g *Grocery) UpdateByID(w http.ResponseWriter, r *http.Request) {
 		"Notes":    body.NewNotes,
 	}
 
-	err := g.Repo.UpdateItemByID(r.Context(), "grocery", body.ItemID, new_values)
+	err = db.Repo.UpdateItemByID(r.Context(), groceryCollection, body.ItemID, new_values)
 	if err != nil {
+		log.Println(err)
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
@@ -157,17 +192,43 @@ func (g *Grocery) UpdateByID(w http.ResponseWriter, r *http.Request) {
 
 }
 
-func (g *Grocery) MoveToFridge(w http.ResponseWriter, r *http.Request) {
+func (db *DB) MoveToFridge(w http.ResponseWriter, r *http.Request) {
 	log.Println("Move items to fridge")
 
-	err := g.Repo.MoveToFridge(r.Context())
-	if err != nil {
-		log.Printf("failed to move grocery items to fridge: %v", err)
+	authHeader := r.Header.Get("Authorization")
+	var err error
+	if authHeader == "" {
+		err = db.Repo.MoveToFridge(r.Context(), nil)
+		if err != nil {
+			log.Printf("failed to move grocery items to fridge: %v", err)
+		}
+	} else {
+		userClaims, err := getUserClaimsFromHeader(authHeader)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusUnauthorized)
+			return
+		}
+
+		userDocRef := db.Repo.GetDocRef(db.Repo.GetCollectionRef(USER, nil), userClaims.Username)
+		log.Println("THIS IS THE USER:", userDocRef.ID)
+
+		err = db.Repo.MoveToFridge(r.Context(), userDocRef)
+		if err != nil {
+			log.Printf("failed to move grocery items to fridge: %v", err)
+		}
 	}
+
 }
 
-func (g *Grocery) RearrageItems(w http.ResponseWriter, r *http.Request) {
+func (db *DB) RearrageItems(w http.ResponseWriter, r *http.Request) {
 	log.Println("Rearrage items")
+
+	authHeader := r.Header.Get("Authorization")
+	groceryCollection, err := db.getCollectionFromHeader(authHeader, GROCERY)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusUnauthorized)
+		return
+	}
 
 	var body struct {
 		OldIndex int64 `json:"old_index"`
@@ -186,7 +247,7 @@ func (g *Grocery) RearrageItems(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	err := g.Repo.RearrageItems(r.Context(), "grocery", body.OldIndex, body.NewIndex)
+	err = db.Repo.RearrageItems(r.Context(), groceryCollection, body.OldIndex, body.NewIndex)
 	if err != nil {
 		log.Printf("failed to rearrage items: %v", err)
 	}
