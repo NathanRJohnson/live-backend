@@ -59,8 +59,8 @@ func (a *App) loadUserRoutes(router *http.ServeMux) {
 		},
 	}
 	userHandler.SetKeys(a.config.SessionKey, a.config.RefreshKey)
-	router.HandleFunc("POST /", userHandler.Create)
-	router.HandleFunc("GET /", userHandler.Read)
+	router.HandleFunc("POST /signup", userHandler.Create)
+	router.HandleFunc("POST /login", userHandler.Read)
 	router.HandleFunc("GET /refresh", userHandler.Refresh)
 	// router.Handle("GET /{id}", userHandler.Read)
 }
