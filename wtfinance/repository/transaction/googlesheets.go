@@ -18,22 +18,21 @@ type GoogleSheetsRepo struct {
 
 func (g *GoogleSheetsRepo) Insert(ctx context.Context, transaction model.Transaction, sheetRef string) error {
 
-	// spreadsheetID := "13y1kKcEwJX4xsDwsPS5w_wBXh4mZch-YapETkv1POV8"
-	columnRange := "Sheet1!A:A"
+	columnRange := "Sheet1!A3:A"
 
 	resp, err := g.Service.Spreadsheets.Values.Get(sheetRef, columnRange).Do()
 	if err != nil {
 		log.Printf("Unable to retrieve data from column: %v", err)
 		return err
 	}
-	nextEmptyRow := len(resp.Values) + 1
+	nextEmptyRow := len(resp.Values) + 3
 
 	values := [][]interface{}{
 		{
 			transaction.DateCreated.Format("1/2"),
 			transaction.Name,
-			transaction.Amount,
 			transaction.Category,
+			transaction.Amount,
 		},
 	}
 
@@ -42,7 +41,7 @@ func (g *GoogleSheetsRepo) Insert(ctx context.Context, transaction model.Transac
 		Values: values,
 	}
 
-	writeRange := "Sheet1!A" + strconv.Itoa(nextEmptyRow) // Modify this to your desired range
+	writeRange := "Sheet1!A" + strconv.Itoa(nextEmptyRow)
 
 	// Call the Sheets API to update the range
 	_, err = g.Service.Spreadsheets.Values.Update(sheetRef, writeRange, vr).ValueInputOption("USER_ENTERED").Do()
@@ -55,8 +54,15 @@ func (g *GoogleSheetsRepo) Insert(ctx context.Context, transaction model.Transac
 	return err
 }
 
-func (g *GoogleSheetsRepo) FetchAll(ctx context.Context, sheetRef string) ([]model.Transaction, error) {
-	readRange := "Sheet1!A:D" // Get all rows from columns A to D
+func parseAmountToFloat(amount string) (float64, error) {
+	amount = strings.Replace(amount, "$", "", 1)
+	amount = strings.ReplaceAll(amount, ",", "")
+	return strconv.ParseFloat(amount, 2)
+
+}
+
+func (g *GoogleSheetsRepo) FetchTransactions(ctx context.Context, sheetRef string) ([]model.Transaction, error) {
+	readRange := "Sheet1!A:D"
 
 	// Read the values from the specified range
 	resp, err := g.Service.Spreadsheets.Values.Get(sheetRef, readRange).Do()
@@ -72,9 +78,13 @@ func (g *GoogleSheetsRepo) FetchAll(ctx context.Context, sheetRef string) ([]mod
 
 	var transactions []model.Transaction
 	for _, row := range resp.Values {
-		amount64, err := strconv.ParseFloat(strings.Replace(fmt.Sprintf("%v", row[2]), "$", "", 1), 2)
+		log.Println(len(row), "Row:", row)
+		if len(row) < 4 {
+			continue
+		}
+		amount64, err := parseAmountToFloat(fmt.Sprintf("%v", row[3]))
 		if err != nil {
-			log.Printf("Bad value for field 'amount': %v: %v", row[2], err)
+			log.Printf("Bad value for field 'amount': %v: %v", row[3], err)
 			continue
 		}
 		date, err := time.Parse("1/2", fmt.Sprintf("%v", row[0]))
@@ -85,8 +95,8 @@ func (g *GoogleSheetsRepo) FetchAll(ctx context.Context, sheetRef string) ([]mod
 		transactions = append(transactions, model.Transaction{
 			DateCreated: &date,
 			Name:        fmt.Sprintf("%v", row[1]),
+			Category:    fmt.Sprintf("%v", row[2]),
 			Amount:      float32(amount64),
-			Category:    fmt.Sprintf("%v", row[3]),
 		})
 	}
 
