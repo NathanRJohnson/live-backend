@@ -85,7 +85,7 @@ func (t *Transaction) History(w http.ResponseWriter, r *http.Request) {
 
 	// decrypt the value here
 
-	transactions, err := t.Repo.FetchAll(r.Context(), sheetRef)
+	transactions, err := t.Repo.FetchTransactions(r.Context(), sheetRef)
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		log.Printf("Error fetching transactions: %v", err)
